@@ -2,60 +2,70 @@ using UnityEngine;
 using UnityEngine.XR.Interaction.Toolkit;
 using UnityEngine.XR.Interaction.Toolkit.Interactables;
 
-[RequireComponent(typeof(Rigidbody))]
-public class GiroAlAgarrar : MonoBehaviour
+public class AutoShooterOnGrab : MonoBehaviour
 {
-    public float velocidadGiro = 100f; // fuerza de giro
-    private bool girando = false;
+    public GameObject bulletPrefab;
+    public Transform firePoint;
+    public float shootInterval = 0.2f;
+    public float bulletForce = 800f;
 
-    private XRGrabInteractable grabInteractable;
-    private Rigidbody rb;
+    private XRGrabInteractable grab;
+    private bool isShooting = false;
 
-    void Awake()
+    private void Awake()
     {
-        rb = GetComponent<Rigidbody>();
-        rb.useGravity = true;
-        rb.isKinematic = false; // importante para AddTorque
+        grab = GetComponent<XRGrabInteractable>();
 
-        grabInteractable = GetComponent<XRGrabInteractable>();
-        if (grabInteractable == null)
-            grabInteractable = gameObject.AddComponent<XRGrabInteractable>();
-
-        grabInteractable.selectEntered.AddListener(OnAgarrado);
-        grabInteractable.selectExited.AddListener(OnSoltado);
+        grab.selectEntered.AddListener(OnGrabbed);
+        grab.selectExited.AddListener(OnReleased);
     }
 
-    void OnDestroy()
+    private void OnDestroy()
     {
-        grabInteractable.selectEntered.RemoveListener(OnAgarrado);
-        grabInteractable.selectExited.RemoveListener(OnSoltado);
+        grab.selectEntered.RemoveListener(OnGrabbed);
+        grab.selectExited.RemoveListener(OnReleased);
     }
 
-    void FixedUpdate()
+    private void OnGrabbed(SelectEnterEventArgs args)
     {
-        if (girando)
+        Debug.Log("Objeto agarrado  empieza a disparar");
+        isShooting = true;
+        InvokeRepeating(nameof(Shoot), 0f, shootInterval);
+    }
+
+    private void OnReleased(SelectExitEventArgs args)
+    {
+        if (args.isCanceled) return;
+
+        Debug.Log("Objeto soltado  deja de disparar");
+        isShooting = false;
+        CancelInvoke(nameof(Shoot));
+    }
+
+    private void Shoot()
+    {
+        if (!isShooting) return;
+
+        Debug.Log("Disparo generado");
+
+        GameObject bullet = Instantiate(bulletPrefab, firePoint.position, firePoint.rotation);
+
+        Rigidbody rb = bullet.GetComponent<Rigidbody>();
+
+        if (rb != null)
         {
-            // Aplicar torque para rotar alrededor del eje Y
-            rb.AddTorque(Vector3.up * velocidadGiro);
-        }
-    }
+            rb.isKinematic = false;
+            rb.useGravity = false;
 
-    void OnAgarrado(SelectEnterEventArgs args)
-    {
-        girando = true;
-        Debug.Log($"Objeto agarrado por: {args.interactorObject.transform.name}");
-    }
+            rb.AddForce(firePoint.forward * bulletForce, ForceMode.Impulse);
 
-    void OnSoltado(SelectExitEventArgs args)
-    {
-        if (!args.isCanceled)
-        {
-            girando = false;
-            Debug.Log($"Objeto soltado por: {args.interactorObject.transform.name}");
+            Debug.Log("Bala con fuerza aplicada");
         }
         else
         {
-            Debug.Log($"Suelta cancelada por: {args.interactorObject.transform.name}");
+            Debug.LogWarning("La bala no tiene Rigidbody");
         }
+
+        Destroy(bullet, 2f);
     }
 }
